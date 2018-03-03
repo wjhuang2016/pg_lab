@@ -254,7 +254,7 @@ static Node *makeRecursiveViewSelect(char *relname, List *aliases, Node *query);
 		AlterRoleStmt AlterRoleSetStmt AlterPolicyStmt
 		AlterDefaultPrivilegesStmt DefACLAction
 		AnalyzeStmt ClosePortalStmt ClusterStmt CommentStmt
-		ConstraintsSetStmt CopyStmt CreateAsStmt CreateCastStmt
+		ConstraintsSetStmt CopyStmt CreateAsStmt CreateCastStmt CreateClassStmt
 		CreateDomainStmt CreateExtensionStmt CreateGroupStmt CreateOpClassStmt
 		CreateOpFamilyStmt AlterOpFamilyStmt CreatePLangStmt
 		CreateSchemaStmt CreateSeqStmt CreateStmt CreateStatsStmt CreateTableSpaceStmt
@@ -609,7 +609,7 @@ static Node *makeRecursiveViewSelect(char *relname, List *aliases, Node *query);
 	BOOLEAN_P BOTH BY
 
 	CACHE CALLED CASCADE CASCADED CASE CAST CATALOG_P CHAIN CHAR_P
-	CHARACTER CHARACTERISTICS CHECK CHECKPOINT CLASS CLOSE
+	CHARACTER CHARACTERISTICS CHECK CHECKPOINT CLASS CLASSX CLOSE
 	CLUSTER COALESCE COLLATE COLLATION COLUMN COLUMNS COMMENT COMMENTS COMMIT
 	COMMITTED CONCURRENTLY CONFIGURATION CONFLICT CONNECTION CONSTRAINT
 	CONSTRAINTS CONTENT_P CONTINUE_P CONVERSION_P COPY COST CREATE
@@ -666,7 +666,7 @@ static Node *makeRecursiveViewSelect(char *relname, List *aliases, Node *query);
 	RESET RESTART RESTRICT RETURNING RETURNS REVOKE RIGHT ROLE ROLLBACK ROLLUP
 	ROW ROWS RULE
 
-	SAVEPOINT SCHEMA SCHEMAS SCROLL SEARCH SECOND_P SECURITY SELECT SEQUENCE SEQUENCES
+	SAVEPOINT SCHEMA SCHEMAS SCROLL SEARCH SECOND_P SECURITY SELECT SELECTDEPUTYCLASSX SEQUENCE SEQUENCES
 	SERIALIZABLE SERVER SESSION SESSION_USER SET SETS SETOF SHARE SHOW
 	SIMILAR SIMPLE SKIP SMALLINT SNAPSHOT SOME SQL_P STABLE STANDALONE_P
 	START STATEMENT STATISTICS STDIN STDOUT STORAGE STRICT_P STRIP_P
@@ -852,6 +852,7 @@ stmt :
 			| CreateAsStmt
 			| CreateAssertStmt
 			| CreateCastStmt
+      | CreateClassStmt
 			| CreateConversionStmt
 			| CreateDomainStmt
 			| CreateExtensionStmt
@@ -3152,6 +3153,25 @@ CreateStmt:	CREATE OptTemp TABLE qualified_name '(' OptTableElementList ')'
 					$$ = (Node *)n;
 				}
 		;
+
+CreateClassStmt: CREATE CLASSX qualified_name '(' OptTableElementList ')'
+{
+  CreateClassStmt *n = makeNode(CreateClassStmt);
+  n->classname = $3;
+  n->isdeputy = false;
+  n->attrs = $5;
+  $$ = (Node *)n;
+}
+| CREATE SELECTDEPUTYCLASSX qualified_name '(' OptTableElementList ')'  AS '(' SelectStmt ')'
+{
+  CreateClassStmt *n = makeNode(CreateClassStmt);
+  n->classname = $3;
+  n->isdeputy = true;
+  n->attrs = $5;
+  n->selectstmt = $9;
+  $$ = (Node *)n;
+}
+;
 
 /*
  * Redundancy here is needed to avoid shift/reduce conflicts,
@@ -14613,6 +14633,7 @@ unreserved_keyword:
 			| CHARACTERISTICS
 			| CHECKPOINT
 			| CLASS
+      | CLASSX
 			| CLOSE
 			| CLUSTER
 			| COLUMNS
@@ -14799,6 +14820,7 @@ unreserved_keyword:
 			| SEARCH
 			| SECOND_P
 			| SECURITY
+      | SELECTDEPUTYCLASSX
 			| SEQUENCE
 			| SEQUENCES
 			| SERIALIZABLE

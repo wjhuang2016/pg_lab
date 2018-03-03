@@ -3429,4 +3429,16 @@ typedef struct DropSubscriptionStmt
 	DropBehavior behavior;		/* RESTRICT or CASCADE behavior */
 } DropSubscriptionStmt;
 
+typedef struct CreateClassStmt
+{
+  NodeTag type;
+  RangeVar    *classname;
+  bool    isdeputy;
+  List    *attrs;
+
+  // for deputy class
+  Node    *selectstmt;
+  Node    *createstmt;
+} CreateClassStmt;
+
 #endif							/* PARSENODES_H */
