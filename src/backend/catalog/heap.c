@@ -626,7 +626,7 @@ InsertPgAttributeTuple(Relation pg_attribute_rel,
 	values[Anum_pg_attribute_attislocal - 1] = BoolGetDatum(new_attribute->attislocal);
 	values[Anum_pg_attribute_attinhcount - 1] = Int32GetDatum(new_attribute->attinhcount);
 	values[Anum_pg_attribute_attcollation - 1] = ObjectIdGetDatum(new_attribute->attcollation);
-
+	values[Anum_pg_attribute_attisdeputy - 1] = BoolGetDatum(new_attribute->attisdeputy);
 	/* start out with empty permissions and empty options */
 	nulls[Anum_pg_attribute_attacl - 1] = true;
 	nulls[Anum_pg_attribute_attoptions - 1] = true;
@@ -861,6 +861,7 @@ AddNewRelationTuple(Relation pg_class_desc,
 	switch (relkind)
 	{
 		case RELKIND_RELATION:
+		case RELKIND_CLASSX:
 		case RELKIND_MATVIEW:
 		case RELKIND_INDEX:
 		case RELKIND_TOASTVALUE:
@@ -1102,7 +1103,7 @@ heap_create_with_catalog(const char *relname,
 	{
 		/* Use binary-upgrade override for pg_class.oid/relfilenode? */
 		if (IsBinaryUpgrade &&
-			(relkind == RELKIND_RELATION || relkind == RELKIND_SEQUENCE ||
+			(relkind == RELKIND_RELATION || relkind == RELKIND_SEQUENCE || relkind == RELKIND_CLASSX || 
 			 relkind == RELKIND_VIEW || relkind == RELKIND_MATVIEW ||
 			 relkind == RELKIND_COMPOSITE_TYPE || relkind == RELKIND_FOREIGN_TABLE ||
 			 relkind == RELKIND_PARTITIONED_TABLE))
@@ -1136,6 +1137,7 @@ heap_create_with_catalog(const char *relname,
 		switch (relkind)
 		{
 			case RELKIND_RELATION:
+			case RELKIND_CLASSX:
 			case RELKIND_VIEW:
 			case RELKIND_MATVIEW:
 			case RELKIND_FOREIGN_TABLE:
@@ -1181,6 +1183,7 @@ heap_create_with_catalog(const char *relname,
 	 * such is an implementation detail: toast tables, sequences and indexes.
 	 */
 	if (IsUnderPostmaster && (relkind == RELKIND_RELATION ||
+							  relkind == RELKIND_CLASSX ||
 							  relkind == RELKIND_VIEW ||
 							  relkind == RELKIND_MATVIEW ||
 							  relkind == RELKIND_FOREIGN_TABLE ||

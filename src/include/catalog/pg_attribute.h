@@ -156,6 +156,9 @@ CATALOG(pg_attribute,1249) BKI_BOOTSTRAP BKI_WITHOUT_OIDS BKI_ROWTYPE_OID(75) BK
 	/* attribute's collation */
 	Oid			attcollation;
 
+	/* 是否是虚属性 */
+	bool        attisdeputy;
+
 #ifdef CATALOG_VARLEN			/* variable-length fields start here */
 	/* NOTE: The following fields are not present in tuple descriptors. */
 
@@ -167,6 +170,7 @@ CATALOG(pg_attribute,1249) BKI_BOOTSTRAP BKI_WITHOUT_OIDS BKI_ROWTYPE_OID(75) BK
 
 	/* Column-level FDW options */
 	text		attfdwoptions[1];
+
 #endif
 } FormData_pg_attribute;
 
@@ -191,7 +195,7 @@ typedef FormData_pg_attribute *Form_pg_attribute;
  * ----------------
  */
 
-#define Natts_pg_attribute				22
+#define Natts_pg_attribute				23
 #define Anum_pg_attribute_attrelid		1
 #define Anum_pg_attribute_attname		2
 #define Anum_pg_attribute_atttypid		3
@@ -211,9 +215,12 @@ typedef FormData_pg_attribute *Form_pg_attribute;
 #define Anum_pg_attribute_attislocal	17
 #define Anum_pg_attribute_attinhcount	18
 #define Anum_pg_attribute_attcollation	19
-#define Anum_pg_attribute_attacl		20
-#define Anum_pg_attribute_attoptions	21
-#define Anum_pg_attribute_attfdwoptions 22
+/**/
+#define Anum_pg_attribute_attisdeputy   20
+/**/
+#define Anum_pg_attribute_attacl		21
+#define Anum_pg_attribute_attoptions	22
+#define Anum_pg_attribute_attfdwoptions 23
 
 
 /* ----------------

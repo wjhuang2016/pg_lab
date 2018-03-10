@@ -4,6 +4,7 @@
  *	  definition of the system "relation" relation (pg_class)
  *	  along with the relation's initial contents.
  *
+ * Modified by group 1
  *
  * Portions Copyright (c) 1996-2017, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
@@ -166,6 +167,7 @@ DESCR("");
 #define		  RELKIND_COMPOSITE_TYPE  'c'	/* composite type */
 #define		  RELKIND_FOREIGN_TABLE   'f'	/* foreign table */
 #define		  RELKIND_PARTITIONED_TABLE 'p' /* partitioned table */
+#define		  RELKIND_CLASSX		  'X'	/* totem classx for base totem class */
 
 #define		  RELPERSISTENCE_PERMANENT	'p' /* regular table */
 #define		  RELPERSISTENCE_UNLOGGED	'u' /* unlogged permanent table */
