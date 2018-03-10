@@ -1425,6 +1425,7 @@ heap_reloptions(char relkind, Datum reloptions, bool validate)
 			return (bytea *) rdopts;
 		case RELKIND_RELATION:
 		case RELKIND_MATVIEW:
+		case RELKIND_CLASSX:
 			return default_reloptions(reloptions, validate, RELOPT_KIND_HEAP);
 		case RELKIND_PARTITIONED_TABLE:
 			return default_reloptions(reloptions, validate,

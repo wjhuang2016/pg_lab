@@ -534,7 +534,7 @@ DefineRelation(CreateStmt *stmt, char relkind, Oid ownerId,
 
 	if (stmt->partspec != NULL)
 	{
-		if (relkind != RELKIND_RELATION)
+		if (relkind != RELKIND_RELATION && relkind != RELKIND_CLASSX)
 			elog(ERROR, "unexpected relkind: %d", (int) relkind);
 
 		relkind = RELKIND_PARTITIONED_TABLE;
@@ -649,7 +649,8 @@ DefineRelation(CreateStmt *stmt, char relkind, Oid ownerId,
 	 */
 	localHasOids = interpretOidsOption(stmt->options,
 									   (relkind == RELKIND_RELATION ||
-										relkind == RELKIND_PARTITIONED_TABLE));
+										relkind == RELKIND_PARTITIONED_TABLE ||
+										relkind == RELKIND_CLASSX));
 	descriptor->tdhasoid = (localHasOids || parentOidCount > 0);
 
 	/*
@@ -1767,6 +1768,7 @@ MergeAttributes(List *schema, List *supers, char relpersistence,
 							parent->relname)));
 
 		if (relation->rd_rel->relkind != RELKIND_RELATION &&
+			relation->rd_rel->relkind != RELKIND_CLASSX &&
 			relation->rd_rel->relkind != RELKIND_FOREIGN_TABLE &&
 			relation->rd_rel->relkind != RELKIND_PARTITIONED_TABLE)
 			ereport(ERROR,

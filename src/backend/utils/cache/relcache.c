@@ -442,6 +442,7 @@ RelationParseRelOptions(Relation relation, HeapTuple tuple)
 	switch (relation->rd_rel->relkind)
 	{
 		case RELKIND_RELATION:
+		case RELKIND_CLASSX:
 		case RELKIND_TOASTVALUE:
 		case RELKIND_INDEX:
 		case RELKIND_VIEW:
@@ -3328,6 +3329,7 @@ RelationBuildLocalRelation(const char *relname,
 	/* system relations and non-table objects don't have one */
 	if (!IsSystemNamespace(relnamespace) &&
 		(relkind == RELKIND_RELATION ||
+		 relkind == RELKIND_CLASSX ||
 		 relkind == RELKIND_MATVIEW ||
 		 relkind == RELKIND_PARTITIONED_TABLE))
 		rel->rd_rel->relreplident = REPLICA_IDENTITY_DEFAULT;
