@@ -98,10 +98,14 @@ DECLARE_UNIQUE_INDEX(pg_authid_rolname_index, 2676, on pg_authid using btree(rol
 DECLARE_UNIQUE_INDEX(pg_authid_oid_index, 2677, on pg_authid using btree(oid oid_ops));
 #define AuthIdOidIndexId	2677
 
+
 DECLARE_UNIQUE_INDEX(pg_auth_members_role_member_index, 2694, on pg_auth_members using btree(roleid oid_ops, member oid_ops));
 #define AuthMemRoleMemIndexId	2694
 DECLARE_UNIQUE_INDEX(pg_auth_members_member_role_index, 2695, on pg_auth_members using btree(member oid_ops, roleid oid_ops));
 #define AuthMemMemRoleIndexId	2695
+
+DECLARE_UNIQUE_INDEX(pg_bipointer_index, 9101, on pg_bipointer using btree(SourceClassOid oid_ops));
+#define BipointerIndexId 9101
 
 DECLARE_UNIQUE_INDEX(pg_cast_oid_index, 2660, on pg_cast using btree(oid oid_ops));
 #define CastOidIndexId	2660
@@ -146,10 +150,17 @@ DECLARE_INDEX(pg_depend_depender_index, 2673, on pg_depend using btree(classid o
 DECLARE_INDEX(pg_depend_reference_index, 2674, on pg_depend using btree(refclassid oid_ops, refobjid oid_ops, refobjsubid int4_ops));
 #define DependReferenceIndexId	2674
 
+
 DECLARE_UNIQUE_INDEX(pg_description_o_c_o_index, 2675, on pg_description using btree(objoid oid_ops, classoid oid_ops, objsubid int4_ops));
 #define DescriptionObjIndexId  2675
 DECLARE_UNIQUE_INDEX(pg_shdescription_o_c_index, 2397, on pg_shdescription using btree(objoid oid_ops, classoid oid_ops));
 #define SharedDescriptionObjIndexId 2397
+
+DECLARE_UNIQUE_INDEX(pg_deputy_index, 9100, on pg_deputy using btree(DeputyClassOid oid_ops));
+#define DeputyIndexId 9100
+
+DECLARE_UNIQUE_INDEX(pg_deputytype_index, 9102, on pg_deputytype using btree(DeputyClassOid oid_ops));
+#define DeputyTypeIndexId 9102
 
 DECLARE_UNIQUE_INDEX(pg_enum_oid_index, 3502, on pg_enum using btree(oid oid_ops));
 #define EnumOidIndexId	3502
@@ -188,6 +199,12 @@ DECLARE_UNIQUE_INDEX(pg_statistic_ext_name_index, 3997, on pg_statistic_ext usin
 #define StatisticExtNameIndexId 3997
 DECLARE_INDEX(pg_statistic_ext_relid_index, 3379, on pg_statistic_ext using btree(stxrelid oid_ops));
 #define StatisticExtRelidIndexId 3379
+
+DECLARE_UNIQUE_INDEX(pg_switching_index, 9103, on pg_switching using btree(DeputyClassOid oid_ops));
+#define SwitchingIndexId 9103
+
+DECLARE_UNIQUE_INDEX(pg_mapping_index, 9104, on pg_mapping using btree(DeputyClassOid oid_ops));
+#define MappingIndexId 9104
 
 DECLARE_UNIQUE_INDEX(pg_namespace_nspname_index, 2684, on pg_namespace using btree(nspname name_ops));
 #define NamespaceNameIndexId  2684

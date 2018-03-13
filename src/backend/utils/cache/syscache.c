@@ -76,6 +76,11 @@
 #include "utils/rel.h"
 #include "utils/catcache.h"
 #include "utils/syscache.h"
+#include "catalog/pg_deputy.h"
+#include "catalog/pg_deputytype.h"
+#include "catalog/pg_bipointer.h"
+#include "catalog/pg_switching.h"
+#include "catalog/pg_mapping.h"
 
 
 /*---------------------------------------------------------------------------
@@ -253,6 +258,18 @@ static const struct cachedesc cacheinfo[] = {
 		},
 		8
 	},
+  {
+    BipointerId,
+    BipointerIndexId,
+    1,
+    {
+      Anum_pg_bipointer_DeputyClassOid,
+      0,
+      0,
+      0,
+    },
+    8
+  },
 	{
 		CastRelationId,			/* CASTSOURCETARGET */
 		CastSourceTargetIndexId,
@@ -375,6 +392,30 @@ static const struct cachedesc cacheinfo[] = {
 		},
 		8
 	},
+  {
+    DeputyId,
+    DeputyIndexId,
+    1,
+    {
+      Anum_pg_deputy_DeputyClassOid,
+      0,
+      0,
+      0,
+    },
+    8,
+  },
+  {
+    DeputyTypeId,
+    DeputyTypeIndexId,
+    1,
+    {
+      Anum_pg_deputytype_DeputyClassOid,
+      0,
+      0,
+      0,
+    },
+    8,
+  },
 	{EnumRelationId,			/* ENUMOID */
 		EnumOidIndexId,
 		1,
@@ -507,6 +548,17 @@ static const struct cachedesc cacheinfo[] = {
 		},
 		4
 	},
+  {MappingId,
+    MappingIndexId,
+    1,
+    {
+      Anum_pg_mapping_DeputyClassOid,
+      0,
+      0,
+      0,
+    },
+    8,
+  },
 	{NamespaceRelationId,		/* NAMESPACENAME */
 		NamespaceNameIndexId,
 		1,
@@ -793,6 +845,17 @@ static const struct cachedesc cacheinfo[] = {
 		},
 		64
 	},
+  {SwitchingId,
+  SwitchingIndexId,
+  1,
+  {
+    Anum_pg_switching_DeputyClassOid,
+    0,
+    0,
+    0,
+  },
+  8,
+  },
 	{TableSpaceRelationId,		/* TABLESPACEOID */
 		TablespaceOidIndexId,
 		1,
