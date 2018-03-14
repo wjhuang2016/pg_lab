@@ -18,6 +18,93 @@
  * ----------------------------------------------------------------
  */
 #include "postgres.h"
+#include "access/genam.h"
+#include "access/heapam.h"
+#include "access/multixact.h"
+#include "access/reloptions.h"
+#include "access/relscan.h"
+#include "access/sysattr.h"
+#include "access/tupconvert.h"
+#include "access/xact.h"
+#include "access/xlog.h"
+#include "catalog/catalog.h"
+#include "catalog/dependency.h"
+#include "catalog/heap.h"
+#include "catalog/index.h"
+#include "catalog/indexing.h"
+#include "catalog/namespace.h"
+#include "catalog/objectaccess.h"
+#include "catalog/partition.h"
+#include "catalog/pg_am.h"
+#include "catalog/pg_collation.h"
+#include "catalog/pg_constraint.h"
+#include "catalog/pg_constraint_fn.h"
+#include "catalog/pg_depend.h"
+#include "catalog/pg_foreign_table.h"
+#include "catalog/pg_inherits.h"
+#include "catalog/pg_inherits_fn.h"
+#include "catalog/pg_namespace.h"
+#include "catalog/pg_opclass.h"
+#include "catalog/pg_tablespace.h"
+#include "catalog/pg_trigger.h"
+#include "catalog/pg_type.h"
+#include "catalog/pg_type_fn.h"
+#include "catalog/storage.h"
+#include "catalog/storage_xlog.h"
+#include "catalog/toasting.h"
+#include "commands/cluster.h"
+#include "commands/comment.h"
+#include "commands/defrem.h"
+#include "commands/event_trigger.h"
+#include "commands/policy.h"
+#include "commands/sequence.h"
+#include "commands/tablecmds.h"
+#include "commands/tablespace.h"
+#include "commands/trigger.h"
+#include "commands/typecmds.h"
+#include "commands/user.h"
+#include "executor/executor.h"
+#include "foreign/foreign.h"
+#include "miscadmin.h"
+#include "nodes/makefuncs.h"
+#include "nodes/nodeFuncs.h"
+#include "nodes/parsenodes.h"
+#include "optimizer/clauses.h"
+#include "optimizer/planner.h"
+#include "optimizer/predtest.h"
+#include "optimizer/prep.h"
+#include "optimizer/var.h"
+#include "parser/parse_clause.h"
+#include "parser/parse_coerce.h"
+#include "parser/parse_collate.h"
+#include "parser/parse_expr.h"
+#include "parser/parse_oper.h"
+#include "parser/parse_relation.h"
+#include "parser/parse_type.h"
+#include "parser/parse_utilcmd.h"
+#include "parser/parser.h"
+#include "pgstat.h"
+#include "rewrite/rewriteDefine.h"
+#include "rewrite/rewriteHandler.h"
+#include "rewrite/rewriteManip.h"
+#include "storage/bufmgr.h"
+#include "storage/lmgr.h"
+#include "storage/lock.h"
+#include "storage/predicate.h"
+#include "storage/smgr.h"
+#include "utils/acl.h"
+#include "utils/builtins.h"
+#include "utils/fmgroids.h"
+#include "utils/inval.h"
+#include "utils/lsyscache.h"
+#include "utils/memutils.h"
+#include "utils/relcache.h"
+#include "utils/ruleutils.h"
+#include "utils/snapmgr.h"
+#include "utils/syscache.h"
+#include "utils/tqual.h"
+#include "utils/typcache.h"
+
 #include "commands/deputy.h"
 #include "catalog/pg_deputy.h"
 
@@ -36,10 +123,10 @@ InsertPgBipointerTuple(Relation pg_bipointer_rel,
 	memset(values, 0, sizeof(values));
 	memset(nulls, false, sizeof(nulls));
 
-	values[Anum_pg_bipointer_sourceclassid - 1] = ObjectIdGetDatum(new_bipointer->sourceclassid);
-	values[Anum_pg_bipointer_deputyclassid - 1] = NameGetDatum(&new_bipointer->deputyclassid);
-	values[Anum_pg_bipointer_deputyobjid - 1] = ObjectIdGetDatum(new_bipointer->deputyobjid);
-	values[Anum_pg_bipointer_sourceobjid - 1] = Int32GetDatum(new_bipointer->sourceobjid);	
+	values[Anum_pg_bipointer_DeputyClassOid - 1] = ObjectIdGetDatum(new_bipointer->DeputyClassOid);
+	values[Anum_pg_bipointer_DeputyObjectOid - 1] = ObjectIdGetDatum(new_bipointer->DeputyObjectOid);
+	values[Anum_pg_bipointer_SourceClassOid - 1] = ObjectIdGetDatum(new_bipointer->SourceClassOid);
+	values[Anum_pg_bipointer_SourceObjectOid - 1] = ObjectIdGetDatum(new_bipointer->SourceObjectOid);	
 
 	tup = heap_form_tuple(RelationGetDescr(pg_bipointer_rel), values, nulls);
 
@@ -81,16 +168,10 @@ InsertPgSwitchingTuple(Relation pg_switching_rel,
 	memset(values, 0, sizeof(values));
 	memset(nulls, false, sizeof(nulls));
 
-/*
-#define Natts_pg_switching					3
-#define Anum_pg_switching_deputyClassName	1
-#define Anum_pg_switching_deputyType		2
-#define Anum_pg_switching_deputyQuery		3
-*/
-
-	values[Anum_pg_switching_deputyClassName - 1] = NameDataGetDatum(new_bipointer->deputyClassName);
-	values[Anum_pg_switching_deputyType - 1] = CharDatum(&new_bipointer->deputyType);
-	values[Anum_pg_switching_deputyQuery - 1] = TextGetDatum(new_bipointer->deputyQuery);
+	values[Anum_pg_switching_DeputyClassOid - 1] = ObjectIdGetDatum(new_switching->DeputyClassOid);
+	values[Anum_pg_switching_AttributeNumber - 1] = Int32GetDatum(new_switching->AttributeNumber);
+	values[Anum_pg_switching_ExpressionNumber - 1] = Int32GetDatum(new_switching->ExpressionNumber);
+        values[Anum_pg_switching_Expression - 1] = CStringGetTextDatum(&new_switching->Expression);
 
 	tup = heap_form_tuple(RelationGetDescr(pg_switching_rel), values, nulls);
 
@@ -130,9 +211,8 @@ InsertPgDeputyTuple(Relation pg_deputy_rel,
 	memset(values, 0, sizeof(values));
 	memset(nulls, false, sizeof(nulls));
 
-	values[Anum_pg_deputy_deputyseqno-1] = Int4GetDatum(new_deputy->deputyseqno);
-	values[Anum_pg_deputy_deputyclassid-1] = ObjectIdGetDatum(new_deputy->deputyclassid);
-	values[Anum_pg_deputy_sourceclassid-1] = ObjectIdGetDatum(new_deputy->sourceclassid);
+	values[Anum_pg_deputy_DeputyClassOid-1] = ObjectIdGetDatum(new_deputy->DeputyClassOid);
+	values[Anum_pg_deputy_SourceClassOid-1] = ObjectIdGetDatum(new_deputy->SourceClassOid);
 
 	tup = heap_form_tuple(RelationGetDescr(pg_deputy_rel), values, nulls);
 
@@ -152,7 +232,6 @@ AddNewPgDeputyTuple(Oid class_oid, Oid deputy_oid)
 	int			i;
 	Relation	rel;
 	CatalogIndexState indstate;
-	int			natts = tupdesc->natts;
 	ObjectAddress myself,
 				referenced;
 
@@ -163,9 +242,8 @@ AddNewPgDeputyTuple(Oid class_oid, Oid deputy_oid)
 
 	indstate = CatalogOpenIndexes(rel);
 
-	deputy->deputyclassid = deputy_oid;
-	deputy->sourceclassid = class_oid;
-	deputy->deputyseqno = 0;
+	deputy->DeputyClassOid = deputy_oid;
+	deputy->SourceClassOid = class_oid;
 
 	InsertPgDeputyTuple(rel, deputy, indstate);
 
@@ -204,13 +282,13 @@ DefineSelectDeputy(CreateClassStmt *stmt, Oid ownerId,
 	 * Truncate relname to appropriate length (probably a waste of time, as
 	 * parser should have done this already).
 	 */
-	StrNCpy(relname, stmt->relation->relname, NAMEDATALEN);
+	StrNCpy(relname, ((CreateStmt *)(stmt->createstmt))->relation->relname, NAMEDATALEN);
 
 	/*
 	 * Check consistency of arguments
 	 */
-	if (stmt->oncommit != ONCOMMIT_NOOP
-		&& stmt->relation->relpersistence != RELPERSISTENCE_TEMP)
+	if (((CreateStmt *)(stmt->createstmt))->oncommit != ONCOMMIT_NOOP
+		&& ((CreateStmt *)(stmt->createstmt))->relation->relpersistence != RELPERSISTENCE_TEMP)
 		ereport(ERROR,
 				(errcode(ERRCODE_INVALID_TABLE_DEFINITION),
 				 errmsg("ON COMMIT can only be used on temporary tables")));
@@ -222,14 +300,14 @@ DefineSelectDeputy(CreateClassStmt *stmt, Oid ownerId,
 	 * namespace is selected.
 	 */
 	namespaceId =
-		RangeVarGetAndCheckCreationNamespace(stmt->relation, NoLock, NULL);
+		RangeVarGetAndCheckCreationNamespace(((CreateStmt *)(stmt->createstmt))->relation, NoLock, NULL);
 
 	/*
 	 * Security check: disallow creating temp tables from security-restricted
 	 * code.  This is needed because calling code might not expect untrusted
 	 * tables to appear in pg_temp at the front of its search path.
 	 */
-	if (stmt->relation->relpersistence == RELPERSISTENCE_TEMP
+	if (((CreateStmt *)(stmt->createstmt))->relation->relpersistence == RELPERSISTENCE_TEMP
 		&& InSecurityRestrictedOperation())
 		ereport(ERROR,
 				(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
@@ -239,13 +317,13 @@ DefineSelectDeputy(CreateClassStmt *stmt, Oid ownerId,
 	 * Select tablespace to use.  If not specified, use default tablespace
 	 * (which may in turn default to database's default).
 	 */
-	if (stmt->tablespacename)
+	if (((CreateStmt *)(stmt->createstmt))->tablespacename)
 	{
-		tablespaceId = get_tablespace_oid(stmt->tablespacename, false);
+		tablespaceId = get_tablespace_oid(((CreateStmt *)(stmt->createstmt))->tablespacename, false);
 	}
 	else
 	{
-		tablespaceId = GetDefaultTablespace(stmt->relation->relpersistence);
+		tablespaceId = GetDefaultTablespace(((CreateStmt *)(stmt->createstmt))->relation->relpersistence);
 		/* note InvalidOid is OK in this case */
 	}
 
@@ -274,14 +352,14 @@ DefineSelectDeputy(CreateClassStmt *stmt, Oid ownerId,
 	/*
 	 * Parse and validate reloptions, if any.
 	 */
-	reloptions = transformRelOptions((Datum) 0, stmt->options, NULL, validnsps,
+	reloptions = transformRelOptions((Datum) 0, ((CreateStmt *)(stmt->createstmt))->options, NULL, validnsps,
 									 true, false);
 
-	if (stmt->ofTypename)
+	if (((CreateStmt *)(stmt->createstmt))->ofTypename)
 	{
 		AclResult	aclresult;
 
-		ofTypeId = typenameTypeId(NULL, stmt->ofTypename);
+		ofTypeId = typenameTypeId(NULL, ((CreateStmt *)(stmt->createstmt))->ofTypename);
 
 		aclresult = pg_type_aclcheck(ofTypeId, GetUserId(), ACL_USAGE);
 		if (aclresult != ACLCHECK_OK)
@@ -295,10 +373,10 @@ DefineSelectDeputy(CreateClassStmt *stmt, Oid ownerId,
 	 * inherited attributes.  (Note that stmt->tableElts is destructively
 	 * modified by MergeAttributes.)
 	 */
-	stmt->tableElts =
-		MergeAttributes(stmt->tableElts, stmt->inhRelations,
-						stmt->relation->relpersistence,
-						stmt->partbound != NULL,
+	((CreateStmt *)(stmt->createstmt))->tableElts =
+		MergeAttributes(((CreateStmt *)(stmt->createstmt))->tableElts, ((CreateStmt *)(stmt->createstmt))->inhRelations,
+						((CreateStmt *)(stmt->createstmt))->relation->relpersistence,
+						((CreateStmt *)(stmt->createstmt))->partbound != NULL,
 						&inheritOids, &old_constraints, &parentOidCount);
 
 	/*
@@ -306,7 +384,7 @@ DefineSelectDeputy(CreateClassStmt *stmt, Oid ownerId,
 	 * deals with column names, types, and NOT NULL constraints, but not
 	 * default values or CHECK constraints; we handle those below.
 	 */
-	descriptor = BuildDescForRelation(stmt->tableElts);
+	descriptor = BuildDescForRelation(((CreateStmt *)(stmt->createstmt))->tableElts);
 
 	/*
 	 * Notice that we allow OIDs here only for plain tables and partitioned
@@ -317,14 +395,14 @@ DefineSelectDeputy(CreateClassStmt *stmt, Oid ownerId,
 	 * default_with_oids to affect other relkinds, but it would complicate
 	 * interpretOidsOption().
 	 */
-	localHasOids = interpretOidsOption(stmt->options, true);
+	localHasOids = interpretOidsOption(((CreateStmt *)(stmt->createstmt))->options, true);
 	descriptor->tdhasoid = (localHasOids || parentOidCount > 0);
 
 	/*
 	 * If a partitioned table doesn't have the system OID column, then none of
 	 * its partitions should have it.
 	 */
-	if (stmt->partbound && parentOidCount == 0 && localHasOids)
+	if (((CreateStmt *)(stmt->createstmt))->partbound && parentOidCount == 0 && localHasOids)
 		ereport(ERROR,
 				(errcode(ERRCODE_WRONG_OBJECT_TYPE),
 				 errmsg("cannot create table with OIDs as partition of table without OIDs")));
@@ -345,7 +423,7 @@ DefineSelectDeputy(CreateClassStmt *stmt, Oid ownerId,
 	cookedDefaults = NIL;
 	attnum = 0;
 
-	foreach(listptr, stmt->tableElts)
+	foreach(listptr, ((CreateStmt *)(stmt->createstmt))->tableElts)
 	{
 		ColumnDef  *colDef = lfirst(listptr);
 
@@ -401,12 +479,12 @@ DefineSelectDeputy(CreateClassStmt *stmt, Oid ownerId,
 										  list_concat(cookedDefaults,
 													  old_constraints),
 										  RELKIND_CLASSX,
-										  stmt->relation->relpersistence,
+										  ((CreateStmt *)(stmt->createstmt))->relation->relpersistence,
 										  false,
 										  false,
 										  localHasOids,
 										  parentOidCount,
-										  stmt->oncommit,
+										  ((CreateStmt *)(stmt->createstmt))->oncommit,
 										  reloptions,
 										  true,
 										  allowSystemTableMods,
@@ -414,7 +492,7 @@ DefineSelectDeputy(CreateClassStmt *stmt, Oid ownerId,
 										  typaddress);
 
 	/* Store inheritance information for new rel. */
-	StoreCatalogInheritance(relationId, inheritOids, stmt->partbound != NULL);
+	StoreCatalogInheritance(relationId, inheritOids, ((CreateStmt *)(stmt->createstmt))->partbound != NULL);
 
 	/* Process deputy relations */
 	//AddNewPgDeputyTuple(class_oid, relationId);
@@ -437,7 +515,7 @@ DefineSelectDeputy(CreateClassStmt *stmt, Oid ownerId,
 	 * Process the partitioning specification (if any) and store the partition
 	 * key information into the catalog.
 	 */
-	if (stmt->partspec)
+	if (((CreateStmt *)(stmt->createstmt))->partspec)
 	{
 		char		strategy;
 		int			partnatts;
@@ -446,7 +524,7 @@ DefineSelectDeputy(CreateClassStmt *stmt, Oid ownerId,
 		Oid			partcollation[PARTITION_MAX_KEYS];
 		List	   *partexprs = NIL;
 
-		partnatts = list_length(stmt->partspec->partParams);
+		partnatts = list_length(((CreateStmt *)(stmt->createstmt))->partspec->partParams);
 
 		/* Protect fixed-size arrays here and in executor */
 		if (partnatts > PARTITION_MAX_KEYS)
@@ -461,10 +539,10 @@ DefineSelectDeputy(CreateClassStmt *stmt, Oid ownerId,
 		 * and CHECK constraints, we could not have done the transformation
 		 * earlier.
 		 */
-		stmt->partspec = transformPartitionSpec(rel, stmt->partspec,
+		((CreateStmt *)(stmt->createstmt))->partspec = transformPartitionSpec(rel, ((CreateStmt *)(stmt->createstmt))->partspec,
 												&strategy);
 
-		ComputePartitionAttrs(rel, stmt->partspec->partParams,
+		ComputePartitionAttrs(rel, ((CreateStmt *)(stmt->createstmt))->partspec->partParams,
 							  partattrs, &partexprs, partopclass,
 							  partcollation);
 
@@ -481,8 +559,8 @@ DefineSelectDeputy(CreateClassStmt *stmt, Oid ownerId,
 	 * work unless we have a pre-existing relation. So, the transformation has
 	 * to be postponed to this final step of CREATE TABLE.
 	 */
-	if (rawDefaults || stmt->constraints)
-		AddRelationNewConstraints(rel, rawDefaults, stmt->constraints,
+	if (rawDefaults || ((CreateStmt *)(stmt->createstmt))->constraints)
+		AddRelationNewConstraints(rel, rawDefaults, ((CreateStmt *)(stmt->createstmt))->constraints,
 								  true, true, false);
 
 	ObjectAddressSet(address, RelationRelationId, relationId);

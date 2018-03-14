@@ -1,6 +1,9 @@
 #ifndef DEPUTY_H
 #define DEPUTY_H
 
+#include "catalog/pg_bipointer.h"
+#include "catalog/pg_switching.h"
+#include "catalog/pg_deputy.h"
 #include "catalog/indexing.h"
 #include "catalog/objectaddress.h"
 #include "parser/parse_node.h"

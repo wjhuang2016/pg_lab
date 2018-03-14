@@ -10,7 +10,7 @@ CATALOG(pg_bipointer,9001) BKI_WITHOUT_OIDS
   Oid   DeputyClassOid;
   Oid   DeputyObjectOid;
   Oid   SourceClassOid;
-  Oid   SourceObjectrOid;
+  Oid   SourceObjectOid;
 } FormData_pg_bipointer;
 
 typedef FormData_pg_bipointer *Form_pg_bipointer;
