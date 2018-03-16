@@ -741,6 +741,7 @@ BuildDescForRelation(List *schema)
 		has_not_null |= entry->is_not_null;
 		desc->attrs[attnum - 1]->attislocal = entry->is_local;
 		desc->attrs[attnum - 1]->attinhcount = entry->inhcount;
+                desc->attrs[attnum - 1]->attisdeputy = 0;
 	}
 
 	if (has_not_null)

@@ -276,22 +276,18 @@ DefineSelectDeputy(CreateClassStmt *stmt, Oid ownerId,
 	AttrNumber	attnum;
 	static char *validnsps[] = HEAP_RELOPT_NAMESPACES;
 	Oid			ofTypeId;
+        CreateStmt  *createStmt;
 	ObjectAddress address;
+        
+        createStmt = (CreateStmt *)palloc0(sizeof(CreateStmt));
+        createStmt->relation = stmt->classname;
+        createStmt->tableElts = stmt->attrs;
 
 	/*
 	 * Truncate relname to appropriate length (probably a waste of time, as
 	 * parser should have done this already).
 	 */
-	StrNCpy(relname, ((CreateStmt *)(stmt->createstmt))->relation->relname, NAMEDATALEN);
-
-	/*
-	 * Check consistency of arguments
-	 */
-	if (((CreateStmt *)(stmt->createstmt))->oncommit != ONCOMMIT_NOOP
-		&& ((CreateStmt *)(stmt->createstmt))->relation->relpersistence != RELPERSISTENCE_TEMP)
-		ereport(ERROR,
-				(errcode(ERRCODE_INVALID_TABLE_DEFINITION),
-				 errmsg("ON COMMIT can only be used on temporary tables")));
+	StrNCpy(relname, createStmt->relation->relname, NAMEDATALEN);
 
 	/*
 	 * Look up the namespace in which we are supposed to create the relation,
@@ -300,32 +296,24 @@ DefineSelectDeputy(CreateClassStmt *stmt, Oid ownerId,
 	 * namespace is selected.
 	 */
 	namespaceId =
-		RangeVarGetAndCheckCreationNamespace(((CreateStmt *)(stmt->createstmt))->relation, NoLock, NULL);
+		RangeVarGetAndCheckCreationNamespace(createStmt->relation, NoLock, NULL);
 
 	/*
 	 * Security check: disallow creating temp tables from security-restricted
 	 * code.  This is needed because calling code might not expect untrusted
 	 * tables to appear in pg_temp at the front of its search path.
 	 */
-	if (((CreateStmt *)(stmt->createstmt))->relation->relpersistence == RELPERSISTENCE_TEMP
+	if (createStmt->relation->relpersistence == RELPERSISTENCE_TEMP
 		&& InSecurityRestrictedOperation())
 		ereport(ERROR,
 				(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
 				 errmsg("cannot create temporary table within security-restricted operation")));
 
 	/*
-	 * Select tablespace to use.  If not specified, use default tablespace
-	 * (which may in turn default to database's default).
+	 * Use default tablespace
 	 */
-	if (((CreateStmt *)(stmt->createstmt))->tablespacename)
-	{
-		tablespaceId = get_tablespace_oid(((CreateStmt *)(stmt->createstmt))->tablespacename, false);
-	}
-	else
-	{
-		tablespaceId = GetDefaultTablespace(((CreateStmt *)(stmt->createstmt))->relation->relpersistence);
-		/* note InvalidOid is OK in this case */
-	}
+        tablespaceId = GetDefaultTablespace(createStmt->relation->relpersistence);
+        /* note InvalidOid is OK in this case */
 
 	/* Check permissions except when using database's default */
 	if (OidIsValid(tablespaceId) && tablespaceId != MyDatabaseTableSpace)
@@ -352,60 +340,23 @@ DefineSelectDeputy(CreateClassStmt *stmt, Oid ownerId,
 	/*
 	 * Parse and validate reloptions, if any.
 	 */
-	reloptions = transformRelOptions((Datum) 0, ((CreateStmt *)(stmt->createstmt))->options, NULL, validnsps,
+	reloptions = transformRelOptions((Datum) 0, createStmt->options, NULL, validnsps,
 									 true, false);
 
-	if (((CreateStmt *)(stmt->createstmt))->ofTypename)
-	{
-		AclResult	aclresult;
-
-		ofTypeId = typenameTypeId(NULL, ((CreateStmt *)(stmt->createstmt))->ofTypename);
-
-		aclresult = pg_type_aclcheck(ofTypeId, GetUserId(), ACL_USAGE);
-		if (aclresult != ACLCHECK_OK)
-			aclcheck_error_type(aclresult, ofTypeId);
-	}
-	else
-		ofTypeId = InvalidOid;
-
-	/*
-	 * Look up inheritance ancestors and generate relation schema, including
-	 * inherited attributes.  (Note that stmt->tableElts is destructively
-	 * modified by MergeAttributes.)
-	 */
-	((CreateStmt *)(stmt->createstmt))->tableElts =
-		MergeAttributes(((CreateStmt *)(stmt->createstmt))->tableElts, ((CreateStmt *)(stmt->createstmt))->inhRelations,
-						((CreateStmt *)(stmt->createstmt))->relation->relpersistence,
-						((CreateStmt *)(stmt->createstmt))->partbound != NULL,
-						&inheritOids, &old_constraints, &parentOidCount);
+        ofTypeId = InvalidOid;
 
 	/*
 	 * Create a tuple descriptor from the relation schema.  Note that this
 	 * deals with column names, types, and NOT NULL constraints, but not
 	 * default values or CHECK constraints; we handle those below.
 	 */
-	descriptor = BuildDescForRelation(((CreateStmt *)(stmt->createstmt))->tableElts);
+	descriptor = BuildDescForRelation(createStmt->tableElts);
 
 	/*
-	 * Notice that we allow OIDs here only for plain tables and partitioned
-	 * tables, even though some other relkinds can support them.  This is
-	 * necessary because the default_with_oids GUC must apply only to plain
-	 * tables and not any other relkind; doing otherwise would break existing
-	 * pg_dump files.  We could allow explicit "WITH OIDS" while not allowing
-	 * default_with_oids to affect other relkinds, but it would complicate
-	 * interpretOidsOption().
+	 * For deputy class force hasoid == true 
 	 */
-	localHasOids = interpretOidsOption(((CreateStmt *)(stmt->createstmt))->options, true);
-	descriptor->tdhasoid = (localHasOids || parentOidCount > 0);
-
-	/*
-	 * If a partitioned table doesn't have the system OID column, then none of
-	 * its partitions should have it.
-	 */
-	if (((CreateStmt *)(stmt->createstmt))->partbound && parentOidCount == 0 && localHasOids)
-		ereport(ERROR,
-				(errcode(ERRCODE_WRONG_OBJECT_TYPE),
-				 errmsg("cannot create table with OIDs as partition of table without OIDs")));
+        localHasOids = true;
+	descriptor->tdhasoid = true;
 
 	/*
 	 * Find columns with default values and prepare for insertion of the
@@ -423,7 +374,7 @@ DefineSelectDeputy(CreateClassStmt *stmt, Oid ownerId,
 	cookedDefaults = NIL;
 	attnum = 0;
 
-	foreach(listptr, ((CreateStmt *)(stmt->createstmt))->tableElts)
+	foreach(listptr, createStmt->tableElts)
 	{
 		ColumnDef  *colDef = lfirst(listptr);
 
@@ -462,6 +413,8 @@ DefineSelectDeputy(CreateClassStmt *stmt, Oid ownerId,
 		if (colDef->identity)
 			descriptor->attrs[attnum - 1]->attidentity = colDef->identity;
 	}
+	
+	//TODO: Find deputy attribute and non-deputy attribute
 
 	/*
 	 * Create the relation.  Inherited defaults and constraints are passed in
@@ -479,20 +432,17 @@ DefineSelectDeputy(CreateClassStmt *stmt, Oid ownerId,
 										  list_concat(cookedDefaults,
 													  old_constraints),
 										  RELKIND_CLASSX,
-										  ((CreateStmt *)(stmt->createstmt))->relation->relpersistence,
+										  createStmt->relation->relpersistence,
 										  false,
 										  false,
 										  localHasOids,
 										  parentOidCount,
-										  ((CreateStmt *)(stmt->createstmt))->oncommit,
+										  createStmt->oncommit,
 										  reloptions,
 										  true,
 										  allowSystemTableMods,
 										  false,
 										  typaddress);
-
-	/* Store inheritance information for new rel. */
-	StoreCatalogInheritance(relationId, inheritOids, ((CreateStmt *)(stmt->createstmt))->partbound != NULL);
 
 	/* Process deputy relations */
 	//AddNewPgDeputyTuple(class_oid, relationId);
@@ -512,45 +462,6 @@ DefineSelectDeputy(CreateClassStmt *stmt, Oid ownerId,
 	rel = relation_open(relationId, AccessExclusiveLock);
 
 	/*
-	 * Process the partitioning specification (if any) and store the partition
-	 * key information into the catalog.
-	 */
-	if (((CreateStmt *)(stmt->createstmt))->partspec)
-	{
-		char		strategy;
-		int			partnatts;
-		AttrNumber	partattrs[PARTITION_MAX_KEYS];
-		Oid			partopclass[PARTITION_MAX_KEYS];
-		Oid			partcollation[PARTITION_MAX_KEYS];
-		List	   *partexprs = NIL;
-
-		partnatts = list_length(((CreateStmt *)(stmt->createstmt))->partspec->partParams);
-
-		/* Protect fixed-size arrays here and in executor */
-		if (partnatts > PARTITION_MAX_KEYS)
-			ereport(ERROR,
-					(errcode(ERRCODE_TOO_MANY_COLUMNS),
-					 errmsg("cannot partition using more than %d columns",
-							PARTITION_MAX_KEYS)));
-
-		/*
-		 * We need to transform the raw parsetrees corresponding to partition
-		 * expressions into executable expression trees.  Like column defaults
-		 * and CHECK constraints, we could not have done the transformation
-		 * earlier.
-		 */
-		((CreateStmt *)(stmt->createstmt))->partspec = transformPartitionSpec(rel, ((CreateStmt *)(stmt->createstmt))->partspec,
-												&strategy);
-
-		ComputePartitionAttrs(rel, ((CreateStmt *)(stmt->createstmt))->partspec->partParams,
-							  partattrs, &partexprs, partopclass,
-							  partcollation);
-
-		StorePartitionKey(rel, strategy, partnatts, partattrs, partexprs,
-						  partopclass, partcollation);
-	}
-
-	/*
 	 * Now add any newly specified column default values and CHECK constraints
 	 * to the new relation.  These are passed to us in the form of raw
 	 * parsetrees; we need to transform them to executable expression trees
@@ -559,8 +470,8 @@ DefineSelectDeputy(CreateClassStmt *stmt, Oid ownerId,
 	 * work unless we have a pre-existing relation. So, the transformation has
 	 * to be postponed to this final step of CREATE TABLE.
 	 */
-	if (rawDefaults || ((CreateStmt *)(stmt->createstmt))->constraints)
-		AddRelationNewConstraints(rel, rawDefaults, ((CreateStmt *)(stmt->createstmt))->constraints,
+	if (rawDefaults)
+		AddRelationNewConstraints(rel, rawDefaults, createStmt->constraints,
 								  true, true, false);
 
 	ObjectAddressSet(address, RelationRelationId, relationId);

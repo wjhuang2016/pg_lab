@@ -11,5 +11,10 @@ ObjectAddress
 DefineClass(CreateClassStmt *stmt, Oid ownerId,
             ObjectAddress *typaddress, const char *queryString)
 {
-    return DefineRelation((CreateStmt *) (stmt->createstmt), RELKIND_CLASSX ,ownerId, typaddress, queryString);
+    CreateStmt *createStmt;
+    createStmt = (CreateStmt *)palloc0(sizeof(CreateStmt));
+    createStmt->relation = stmt->classname;
+    createStmt->tableElts = stmt->attrs;
+    
+    return DefineRelation(createStmt, RELKIND_CLASSX ,ownerId, typaddress, queryString);
 }
