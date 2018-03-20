@@ -484,3 +484,14 @@ DefineSelectDeputy(CreateClassStmt *stmt, Oid ownerId,
 
 	return address;
 }
+
+/*
+ * 这个函数用于在创建代理类之后，初始化代理对象
+ * 实现方式是：遍历源类的所有对象，通过切换表达式检查源类对象是否满足条件，如果满足条件，将源对象的Oid插入到bipointer表中
+ */
+void InitSelectDeputy(Oid sourceClassOid, Oid deputyClassOid, Node* switchingExpr) {
+	// Step. 1 从pg_mapping表中获取sourceClassOid所有的对象Oid
+	// (这里应该是个list吧)
+	// Step. 2 逐一检查取出的对象Oid是否满足switchingExpr
+	//--> Step. 2.5 如果满足条件，则插入到pg_bipointer
+}
