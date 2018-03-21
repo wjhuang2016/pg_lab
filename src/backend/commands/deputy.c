@@ -490,8 +490,28 @@ DefineSelectDeputy(CreateClassStmt *stmt, Oid ownerId,
  * 实现方式是：遍历源类的所有对象，通过切换表达式检查源类对象是否满足条件，如果满足条件，将源对象的Oid插入到bipointer表中
  */
 void InitSelectDeputy(Oid sourceClassOid, Oid deputyClassOid, Node* switchingExpr) {
-	// Step. 1 从pg_mapping表中获取sourceClassOid所有的对象Oid
-	// (这里应该是个list吧)
-	// Step. 2 逐一检查取出的对象Oid是否满足switchingExpr
-	//--> Step. 2.5 如果满足条件，则插入到pg_bipointer
+    Relation srcRel;
+    SysScanDesc scan;
+    HeapTuple tup;
+    ScanKeyData key[1];
+    Snapshot snapshot;
+    HeapScanDesc scan;
+    List *oid_list = NIL;
+    //
+    snapshot = RegisterSnapshot(GetTransactionSnapshot());
+    PushActiveSnapshot(snapshot);
+    srcRel = relation_open(sourceClassOid, RowExclusiveLock);
+    // Step. 1.2 扫描(table scan, 这里用heap_scan)
+    scan = heap_beginscan(srcRel, snapshot, 0, NULL);
+    // Step. 2 逐一检查取出的对象Oid是否满足switchingExpr
+    while ((tup = heap_getnext(scan, ForwardScanDirection)) != NULL)
+    {
+        // TODO: 在这里判断tup是否满足switchingExpr的条件
+        oid_list = lappend_oid(oid_list, HeapTupleGetOid(tup));
+    }
+    // Step. 3 为oid_list中的oid创建代理对象，并将代理对象插入到代理对象的表（deputyClassOid）中，将两个oid打包插入到bipointer中
+    // 清理操作
+    relation_close(srcRel, RowExclusiveLock);
+    PopActiveSnapshot();
+    UnregisterSnapshot(snapshot);
 }
