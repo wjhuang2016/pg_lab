@@ -490,28 +490,47 @@ DefineSelectDeputy(CreateClassStmt *stmt, Oid ownerId,
  * 实现方式是：遍历源类的所有对象，通过切换表达式检查源类对象是否满足条件，如果满足条件，将源对象的Oid插入到bipointer表中
  */
 void InitSelectDeputy(Oid sourceClassOid, Oid deputyClassOid, Node* switchingExpr) {
-    Relation srcRel;
+    Relation srcRel, depRel, biRel;
     SysScanDesc scan;
     HeapTuple tup;
     ScanKeyData key[1];
     Snapshot snapshot;
     HeapScanDesc scan;
-    List *oid_list = NIL;
+    List *src_oid_list = NIL, *dep_oid_list = NIL;
+    ListCell *srcObjOid, *depObjOid;
     //
     snapshot = RegisterSnapshot(GetTransactionSnapshot());
     PushActiveSnapshot(snapshot);
     srcRel = relation_open(sourceClassOid, RowExclusiveLock);
-    // Step. 1.2 扫描(table scan, 这里用heap_scan)
+    // Step. 1 扫描(table scan, 这里用heap_scan)
     scan = heap_beginscan(srcRel, snapshot, 0, NULL);
     // Step. 2 逐一检查取出的对象Oid是否满足switchingExpr
     while ((tup = heap_getnext(scan, ForwardScanDirection)) != NULL)
     {
         // TODO: 在这里判断tup是否满足switchingExpr的条件
-        oid_list = lappend_oid(oid_list, HeapTupleGetOid(tup));
+        src_oid_list = lappend_oid(src_oid_list, HeapTupleGetOid(tup));
     }
-    // Step. 3 为oid_list中的oid创建代理对象，并将代理对象插入到代理对象的表（deputyClassOid）中，将两个oid打包插入到bipointer中
+    heap_endscan(scan);
     // 清理操作
     relation_close(srcRel, RowExclusiveLock);
+    // Step. 3 为oid_list中的oid创建代理对象，并将代理对象插入到代理对象的表（deputyClassOid）中，将两个oid打包插入到bipointer中
+    depRel = relation_open(deputyClassOid, RowExclusiveLock);
+    foreach (srcObjOid, src_oid_list) {
+        // 创建一个空的代理对象，然后插入到代理类的表中
+        // 拿到Oid之后，插入到dep_oid_list
+        // TODO: 补全这个函数,就是插入一个空的代理对象
+    }
+    relation_close(depRel, RowExclusiveLock);
+    // Step. 3.1 打包插入到bipointer
+    // 用这个：AddNewBipointerTuples
+    forboth(srcObjOid, src_oid_list, depObjOid, dep_oid_list) {
+        FormData_pg_bipointer new_pg_bipointer;
+        new_pg_bipointer.SourceClassOid = sourceClassOid;
+        new_pg_bipointer.SourceObjectOid = srcObjOid->data.oid_value;
+        new_pg_bipointer.DeputyClassOid = deputyClassOid;
+        new_pg_bipointer.DeputyObjectOid = depObjOid->data.oid_value;
+        AddNewBipointerTuples(&new_pg_bipointer);
+    }
     PopActiveSnapshot();
     UnregisterSnapshot(snapshot);
 }
